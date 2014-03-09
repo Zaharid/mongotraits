@@ -55,7 +55,6 @@ class BaseReference(traitlets.TraitType):
             value = self.dereference(value)
 
         super(BaseReference, self).__set__(obj, value)
-        obj._db_values[self.name] = self.ref(value)
 
     def dereference(self, value):
         return self.klass.load(value)
@@ -76,30 +75,8 @@ class ReferenceList(BaseReference, traitlets.List):
 
     def __init__(self, document,  *args, **kwargs):
         trait = self.ref_class(document)
-
         super(ReferenceList, self).__init__(trait = trait,
             *args, **kwargs)
-
-    def dereference(self, value):
-        print("Tryind to dereference %s"%value)
-        return tuple(self._trait.dereference(elem) for elem in value)
-    def ref(self, value):
-        return tuple(elem._id for elem in value)
-
-class EmbeddedDocumentTrait(traitlets.Instance):
-    def __init__(self, *args, **kwargs):
-        if not 'db' in kwargs:
-            kwargs['db'] = True
-        super(EmbeddedDocumentTrait, self).__init__(*args, **kwargs)
-    def __set__(self, obj, value):
-        super(EmbeddedDocumentTrait, self).__set__(obj, value)
-        if self.__get__(obj) is not None:
-            value.base_document = obj.__class__
-            value.__class__._idrefs[value.idref_key(value)] = value
-
-
-            #value.check_instance()
-
 
 class Meta(traitlets.MetaHasTraits):
 
@@ -124,31 +101,26 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
         return inst
 
     def __init__(self, *args, **kwargs):
-        self.base_document = kwargs.pop('base_document', None)
         super(BaseDocument,self).__init__(*args, **kwargs)
         self.check_instance()
 
 
-    def check_instance(self, _id=None, base_document=None):
+    def check_instance(self, _id=None):
         if _id is None:
             _id = self._id
-        if base_document is None:
-            base_document = self.base_document
-        key = self.idref_key(self, _id = _id, base_document = base_document)
-        if key in self.__class__._idrefs:
+        if _id in self.__class__._idrefs:
             raise MongoTraitsError("Trying to instantiate two onjects with the same id")
-        if key is not None:
-            self.__class__._idrefs[key] = self
+        if _id is not None:
+            self.__class__._idrefs[_id] = self
 
 
     @classmethod
-    def resolve_instance(cls, kwargsdict, base_document = None, allow_update = False):
-        kwargsdict = cls.to_classdict(kwargsdict, base_document,allow_update)
+    def resolve_instance(cls, kwargsdict, allow_update = False):
+        kwargsdict = cls.to_classdict(kwargsdict,allow_update)
         if '_id' in kwargsdict:
             uid =  kwargsdict['_id']
-            idref_key = cls.idref_key(_id = uid, base_document = base_document)
-            if idref_key in cls._idrefs:
-                ins = cls._idrefs[idref_key]
+            if uid in cls._idrefs:
+                ins = cls._idrefs[uid]
                 for key, value in kwargsdict.items():
                     if value != getattr(ins, key):
                         if allow_update:
@@ -156,47 +128,42 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
                         else:
                             raise MongoTraitsError("Local and database objects are inconsistent and allow_update is set to false.")
                 return ins
-        kwargsdict['base_document'] = base_document
         ins = cls(**kwargsdict)
         return ins
 
-    @staticmethod
-    def idref_key(ins=None, _id=None, base_document = None):
-        if _id is None:
-            return ins._id
-        else:
-            return _id
-
-
     @classmethod
-    def to_classdict(cls,kwargsdict, base_document = None, allow_update = False ):
+    def to_classdict(cls,kwargsdict, allow_update = False ):
         result = {}
         traits = cls.class_traits(db=True)
         instance_traits = {key:value for (key,value) in traits.items()
             if isinstance(value, traitlets.ClassBasedTraitType) }
         container_traits = {key:value for (key,value) in traits.items()
             if isinstance(value, traitlets.Container) }
+        #import pdb;pdb.set_trace()
+        print ("container traits:%s"%container_traits)
 
         for (key, value) in kwargsdict.items():
-            if key in instance_traits:
-                result[key] = cls.to_instance(value,instance_traits[key],
-                                base_document, allow_update)
-            elif key in container_traits:
+            if key in container_traits:
+                print ("in container traits")
                 result[key] = cls.to_container(value,container_traits[key],
-                                base_document, allow_update)
+                                allow_update)
+            elif key in instance_traits:
+                result[key] = cls.to_instance(value,instance_traits[key],
+                                 allow_update)
+
             else:
                 result[key] = value
         return result
 
     @classmethod
-    def to_instance(cls, value ,trait, base_document ,allow_update = False):
+    def to_instance(cls, value ,trait ,allow_update = False):
         klass = trait.klass
         if hasattr(trait, 'dereference'):
             return trait.dereference(value)
         elif value is None:
             return value
         elif hasattr(klass,'resolve_instance'):
-            return klass.resolve_instance(value, base_document = base_document,
+            return klass.resolve_instance(value,
                                           allow_update=allow_update)
         elif issubclass(klass, SAME_TYPES):
             return value
@@ -205,13 +172,13 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
 
 
     @classmethod
-    def to_container(cls, value, trait, base_document, allow_update):
-        import pdb;pdb.set_trace()
+    def to_container(cls, value, trait, allow_update):
         _trait =  trait._trait
         if _trait is not None and hasattr(_trait, 'klass'):
+            print _trait
             l = []
             for item in value:
-                l += [cls.to_instance(item,_trait,base_document, allow_update)]
+                l += [cls.to_instance(item,_trait, allow_update)]
             return l
         else:
            return value
@@ -221,20 +188,27 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
         savedict={}
         traits = (trait for trait in self.traits().values()
             if trait.get_metadata('db'))
+
         for trait in traits:
             name = trait.name
             dbname = trait.get_metadata('dbname')
             if dbname is None: dbname = trait.name
-            if name in self._db_values:
-                value = self._db_values[name]
-            else:
-                value = self._trait_values[name]
-                if 'savedict' in dir(value):
-                    value = value.savedict
-                elif not isinstance(value, SAME_TYPES):
-                    value = pickle.dumps(value)
+            value = self.encode_item(trait, self._trait_values[name])
+
             savedict[dbname] = value
         return savedict
+
+
+    def encode_item(self, trait, value):
+        if hasattr(trait, 'ref'):
+            value = trait.ref(value)
+        elif 'savedict' in dir(value):
+            value = value.savedict
+        elif isinstance(trait, traitlets.Container):
+            value = [self.encode_item(trait._trait, elem) for elem in value]
+        elif not isinstance(value, SAME_TYPES):
+            value = pickle.dumps(value)
+        return value
 
 class Document(BaseDocument):
 
@@ -256,7 +230,7 @@ class Document(BaseDocument):
     @classmethod
     def find(cls, query=None, allow_update = False):
         for result in cls._get_collection().find(query):
-            yield cls.resolve_instance(result, base_document = cls,
+            yield cls.resolve_instance(result,
                                        allow_update=allow_update)
 
     @classmethod
@@ -265,14 +239,13 @@ class Document(BaseDocument):
         if result is None:
             raise MongoTraitsError("There was no element matching the query %r"
             % query)
-        return cls.resolve_instance(result, base_document=cls,
+        return cls.resolve_instance(result,
                                     allow_update=allow_update)
 
     @classmethod
     def load(cls,_id, allow_update = False):
-        key = cls.idref_key(_id = _id)
-        if not allow_update and key in cls._idrefs:
-            return cls._idrefs[key]
+        if not allow_update and _id in cls._idrefs:
+            return cls._idrefs[_id]
         return cls.find_one({'_id':_id}, allow_update = allow_update)
 
     def refresh(self):
@@ -283,16 +256,4 @@ class Document(BaseDocument):
         self.collection.save(self.savedict)
 
 class EmbeddedDocument(BaseDocument):
-    @staticmethod
-    def idref_key(ins=None, _id=None, base_document = None):
-
-        if base_document is None:
-            base_document = ins.base_document
-        if base_document is None:
-            return None
-        if _id is None:
-            _id = ins._id
-        assert(issubclass(base_document, Document))
-        return (base_document, _id)
-
-
+    pass

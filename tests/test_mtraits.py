@@ -19,17 +19,17 @@ class EmbDoc(documents.EmbeddedDocument):
 
 class TestDocument(documents.Document):
     mstr = traitlets.Unicode(default_value = "axx", db= True)
-    emb = documents.EmbeddedDocumentTrait(EmbDoc)
+    emb = traitlets.Instance(EmbDoc, db=True)
 
 class TD2(documents.Document):
     xxx = documents.Reference(TestDocument)
-    morex = documents.ReferenceList(TestDocument)
+    morex = traitlets.List(documents.Reference(TestDocument), db=True)
 
 class Test_base(BaseTest):
     def test_toclass(self):
         dic = {u'_id': ObjectId('531c922c1a8d5f4fbc4a8ed7'),
                u'name': u'Hello world', u'value': False}
-        self.assertEqual(EmbDoc.to_classdict(dic, base_document = TestDocument), dic)
+        self.assertEqual(EmbDoc.to_classdict(dic), dic)
     def test_a(self):
         doc = TestDocument(mstr = 'xx')
         self.assertTrue(doc.mstr == 'xx')
