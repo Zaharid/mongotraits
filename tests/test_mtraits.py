@@ -10,6 +10,8 @@ from IPython.utils import traitlets
 from bson.objectid import ObjectId
 from labcore.mongotraits import documents
 
+import numpy as np
+
 from labcore.mongotraits.tests.base import BaseTest
 
 class EmbDoc(documents.EmbeddedDocument):
@@ -20,10 +22,17 @@ class EmbDoc(documents.EmbeddedDocument):
 class TestDocument(documents.Document):
     mstr = traitlets.Unicode(default_value = "axx", db= True)
     emb = traitlets.Instance(EmbDoc, db=True)
+    moreembs = traitlets.List(traitlets.Instance(EmbDoc), db=True)
 
 class TD2(documents.Document):
     xxx = documents.Reference(TestDocument)
     morex = traitlets.List(documents.Reference(TestDocument), db=True)
+    emblist = traitlets.List(
+            documents.EmbeddedReference(EmbDoc,TestDocument,'emb'), db=True
+            )
+
+class NpSave(documents.Document):
+    arr = traitlets.Instance(np.ndarray, db=True)
 
 class Test_base(BaseTest):
     def test_toclass(self):
@@ -40,7 +49,7 @@ class Test_base(BaseTest):
 
     def test_refresh(self):
         doc = TestDocument(mstr = 'xx')
-        TestDocument._get_collection().save({'_id':doc.id, 'mstr':'xyz'})
+        TestDocument.collection().save({'_id':doc.id, 'mstr':'xyz'})
         self.assertRaises(documents.MongoTraitsError,TestDocument.find_one)
         TestDocument.find_one(allow_update = True)
         self.assertEqual(doc.mstr, 'xyz')
@@ -70,8 +79,26 @@ class Test_base(BaseTest):
         new_doc = TestDocument.find_one()
         self.assertEqual(new_doc.emb.name, "Good Bye")
         self.assertTrue(new_doc.emb is embdoc)
-
-
+    def test_numpy(self):
+        obj = NpSave()
+        arr = np.random.normal(size = (100,100))
+        obj.arr = arr
+        obj.save()
+        del obj
+        new_obj = NpSave.find_one()
+        self.assertTrue(np.all(arr== new_obj.arr))
+    def test_embedded_reference(self):
+        td = TestDocument()
+        embdoc = EmbDoc()
+        td.emb = embdoc
+        td2 = TD2()
+        td2.emblist = [embdoc]
+        td.save()
+        td2.save()
+        del td
+        del td2
+        new_td2 = TD2.find_one()
+        self.assertTrue(new_td2.emblist[0] is embdoc)
 
 if __name__ == '__main__':
     unittest.TestLoader().loadTestsFromTestCase(Test_base).debug()

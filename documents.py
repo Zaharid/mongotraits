@@ -11,7 +11,7 @@ import pymongo
 from IPython.utils import traitlets
 from IPython.utils.py3compat import with_metaclass, string_types
 
-from bson import objectid, dbref
+from bson import objectid, dbref, binary
 
 client = None
 database = None
@@ -27,6 +27,7 @@ SAME_TYPES = string_types + (numbers.Number, list, tuple, dict,
 
 class MongoTraitsError(Exception):
     pass
+
 
 class ObjectIdTrait(traitlets.Instance):
     def __init__(self, args=None, kw=None, **metadata):
@@ -44,7 +45,6 @@ class BaseReference(traitlets.TraitType):
             kwargs['db'] = True
         super(BaseReference, self).__init__(*args, **kwargs)
 
-
     def __set__(self, obj, value):
         try:
             value = self.validate(obj, value)
@@ -54,16 +54,28 @@ class BaseReference(traitlets.TraitType):
         super(BaseReference, self).__set__(obj, value)
 
     def dereference(self, value):
+        if value is None:
+            return None
         return self.klass.load(value)
     def ref(self, value):
         return value._id
 
 
-
 class Reference(BaseReference, traitlets.Instance):
     pass
 
-
+class EmbeddedReference(BaseReference, traitlets.Instance):
+    def __init__(self, klass, document, trait_name, *args, **kwargs):
+        self.document = document
+        self.trait_name = trait_name
+        super(EmbeddedReference,self).__init__(klass, *args, **kwargs)
+    def dereference(self, value):
+        klass = self.klass
+        c = self.document.collection()
+        query = {'{self.trait_name}._id'.format(self=self):value}
+        projection = {'{self.trait_name}'.format(self=self):1,"_id":0}
+        mgobj = c.find_one(query, projection)['%s'%self.trait_name]
+        return klass.resolve_instance(mgobj)
 
 class ReferenceList(BaseReference, traitlets.List):
     klass = tuple
@@ -101,7 +113,6 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
         super(BaseDocument,self).__init__(*args, **kwargs)
         self.check_instance()
 
-
     def check_instance(self, _id=None):
         if _id is None:
             _id = self._id
@@ -109,7 +120,6 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
             raise MongoTraitsError("Trying to instantiate two onjects with the same id")
         if _id is not None:
             self.__class__._idrefs[_id] = self
-
 
     @classmethod
     def resolve_instance(cls, kwargsdict, allow_update = False):
@@ -136,12 +146,8 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
             if isinstance(value, traitlets.ClassBasedTraitType) }
         container_traits = {key:value for (key,value) in traits.items()
             if isinstance(value, traitlets.Container) }
-        #import pdb;pdb.set_trace()
-        print ("container traits:%s"%container_traits)
-
         for (key, value) in kwargsdict.items():
             if key in container_traits:
-                print ("in container traits")
                 result[key] = cls.to_container(value,container_traits[key],
                                 allow_update)
             elif key in instance_traits:
@@ -166,7 +172,6 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
             return value
         else:
             return pickle.loads(value)
-
 
     @classmethod
     def to_container(cls, value, trait, allow_update):
@@ -195,44 +200,38 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
             savedict[dbname] = value
         return savedict
 
-
     def encode_item(self, trait, value):
-        if hasattr(trait, 'ref'):
+        if value is None:
+            return value
+        elif hasattr(trait, 'ref'):
             value = trait.ref(value)
         elif 'savedict' in dir(value):
             value = value.savedict
         elif isinstance(trait, traitlets.Container):
             value = [self.encode_item(trait._trait, elem) for elem in value]
         elif not isinstance(value, SAME_TYPES):
-            value = pickle.dumps(value)
+            value = binary.Binary(pickle.dumps(value))
         return value
 
 class Document(BaseDocument):
 
     @classmethod
-    def _get_collection_name(cls):
+    def collection_name(cls):
         return cls.__name__
 
     @classmethod
-    def _get_collection(cls):
-        return database[cls._get_collection_name()]
+    def collection(cls):
+        return database[cls.collection_name()]
 
-    @property
-    def collection(self):
-        return self._get_collection()
-
-    @property
-    def collection_name(self):
-        return self._get_collection_name()
     @classmethod
     def find(cls, query=None, allow_update = False):
-        for result in cls._get_collection().find(query):
+        for result in cls.collection().find(query):
             yield cls.resolve_instance(result,
                                        allow_update=allow_update)
 
     @classmethod
     def find_one(cls, query=None, allow_update = False):
-        result = cls._get_collection().find_one(query)
+        result = cls.collection().find_one(query)
         if result is None:
             raise MongoTraitsError("There was no element matching the query %r"
             % query)
@@ -248,9 +247,8 @@ class Document(BaseDocument):
     def refresh(self):
         self.__class__.load(self._id, allow_update = True)
 
-
     def save(self):
-        self.collection.save(self.savedict)
+        self.collection().save(self.savedict)
 
 class EmbeddedDocument(BaseDocument):
     pass
