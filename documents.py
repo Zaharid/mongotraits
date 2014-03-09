@@ -28,9 +28,6 @@ SAME_TYPES = string_types + (numbers.Number, list, tuple, dict,
 class MongoTraitsError(Exception):
     pass
 
-
-
-
 class ObjectIdTrait(traitlets.Instance):
     def __init__(self, args=None, kw=None, **metadata):
         if args is None and kw is None:
