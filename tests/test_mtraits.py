@@ -7,6 +7,7 @@ Created on Sat Mar  8 21:58:59 2014
 import unittest
 
 from IPython.utils import traitlets
+from bson.objectid import ObjectId
 from labcore.mongotraits import documents
 
 from labcore.mongotraits.tests.base import BaseTest
@@ -24,8 +25,11 @@ class TD2(documents.Document):
     xxx = documents.Reference(TestDocument)
     morex = documents.ReferenceList(TestDocument)
 
-
 class Test_base(BaseTest):
+    def test_toclass(self):
+        dic = {u'_id': ObjectId('531c922c1a8d5f4fbc4a8ed7'),
+               u'name': u'Hello world', u'value': False}
+        self.assertEqual(EmbDoc.to_classdict(dic, base_document = TestDocument), dic)
     def test_a(self):
         doc = TestDocument(mstr = 'xx')
         self.assertTrue(doc.mstr == 'xx')
@@ -59,10 +63,12 @@ class Test_base(BaseTest):
     def test_embdoc(self):
         doc = TestDocument()
         embdoc = EmbDoc()
+        embdoc.name = "Good Bye"
         doc.emb = embdoc
         doc.save()
         del doc
         new_doc = TestDocument.find_one()
+        self.assertEqual(new_doc.emb.name, "Good Bye")
         self.assertTrue(new_doc.emb is embdoc)
 
 
