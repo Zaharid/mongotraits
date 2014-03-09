@@ -68,13 +68,21 @@ class EmbeddedReference(BaseReference, traitlets.Instance):
     def __init__(self, klass, document, trait_name, *args, **kwargs):
         self.document = document
         self.trait_name = trait_name
+        self.islist = isinstance(document.class_traits()[trait_name],
+                                 traitlets.Container)
         super(EmbeddedReference,self).__init__(klass, *args, **kwargs)
+
     def dereference(self, value):
         klass = self.klass
         c = self.document.collection()
         query = {'{self.trait_name}._id'.format(self=self):value}
-        projection = {'{self.trait_name}'.format(self=self):1,"_id":0}
+
+        listproj = '.$' if self.islist else ''
+        projection = {'{self.trait_name}{listproj}'.format(**locals()):1
+        ,"_id":0}
         mgobj = c.find_one(query, projection)['%s'%self.trait_name]
+        if self.islist:
+            mgobj = mgobj[0]
         return klass.resolve_instance(mgobj)
 
 class ReferenceList(BaseReference, traitlets.List):
@@ -114,15 +122,18 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
         self.check_instance()
 
     def check_instance(self, _id=None):
+        errstr = "Trying to instantiate two onjects with the same id"
         if _id is None:
             _id = self._id
         if _id in self.__class__._idrefs:
-            raise MongoTraitsError("Trying to instantiate two onjects with the same id")
+            raise MongoTraitsError(errstr)
         if _id is not None:
             self.__class__._idrefs[_id] = self
 
     @classmethod
     def resolve_instance(cls, kwargsdict, allow_update = False):
+        errstr = ("Local and database objects are inconsistent and"
+        " allow_update is set to false.")
         kwargsdict = cls.to_classdict(kwargsdict,allow_update)
         if '_id' in kwargsdict:
             uid =  kwargsdict['_id']
@@ -133,7 +144,7 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
                         if allow_update:
                             setattr(ins,key, value)
                         else:
-                            raise MongoTraitsError("Local and database objects are inconsistent and allow_update is set to false.")
+                            raise MongoTraitsError(errstr)
                 return ins
         ins = cls(**kwargsdict)
         return ins
@@ -177,7 +188,6 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
     def to_container(cls, value, trait, allow_update):
         _trait =  trait._trait
         if _trait is not None and hasattr(_trait, 'klass'):
-            print _trait
             l = []
             for item in value:
                 l += [cls.to_instance(item,_trait, allow_update)]

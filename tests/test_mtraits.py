@@ -30,6 +30,9 @@ class TD2(documents.Document):
     emblist = traitlets.List(
             documents.EmbeddedReference(EmbDoc,TestDocument,'emb'), db=True
             )
+    moreembslist = traitlets.List(
+            documents.EmbeddedReference(EmbDoc,TestDocument,'moreembs'),
+             db=True)
 
 class NpSave(documents.Document):
     arr = traitlets.Instance(np.ndarray, db=True)
@@ -90,15 +93,19 @@ class Test_base(BaseTest):
     def test_embedded_reference(self):
         td = TestDocument()
         embdoc = EmbDoc()
+        embdocs = [EmbDoc(name= 'a'), EmbDoc(name='b'), EmbDoc(name='c')]
         td.emb = embdoc
+        td.moreembs = embdocs
         td2 = TD2()
         td2.emblist = [embdoc]
+        td2.moreembslist = embdocs[1:]
         td.save()
         td2.save()
         del td
         del td2
         new_td2 = TD2.find_one()
         self.assertTrue(new_td2.emblist[0] is embdoc)
+        self.assertEqual(new_td2.moreembslist, embdocs[1:])
 
 if __name__ == '__main__':
     unittest.TestLoader().loadTestsFromTestCase(Test_base).debug()
