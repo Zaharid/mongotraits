@@ -113,11 +113,6 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
     def id(self, value):
         self._id = value
 
-    def __new__(cls, *args, **kwargs):
-        inst = super(BaseDocument, cls).__new__(cls, *args,**kwargs)
-        inst._db_values = {}
-        return inst
-
     def __init__(self, *args, **kwargs):
         super(BaseDocument,self).__init__(*args, **kwargs)
         self.check_instance()
@@ -204,11 +199,8 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
 
         for trait in traits:
             name = trait.name
-            dbname = trait.get_metadata('dbname')
-            if dbname is None: dbname = trait.name
             value = self.encode_item(trait, self._trait_values[name])
-
-            savedict[dbname] = value
+            savedict[name] = value
         return savedict
 
     def encode_item(self, trait, value):
