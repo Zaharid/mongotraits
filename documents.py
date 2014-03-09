@@ -7,10 +7,11 @@ Created on Sat Mar  8 18:21:31 2014
 import weakref
 import numbers
 import cPickle as pickle
-import pymongo
+
 from IPython.utils import traitlets
 from IPython.utils.py3compat import with_metaclass, string_types
 
+import pymongo
 from bson import objectid, dbref, binary
 
 client = None
