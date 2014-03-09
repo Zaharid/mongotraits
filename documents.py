@@ -6,8 +6,10 @@ Created on Sat Mar  8 18:21:31 2014
 """
 import weakref
 import numbers
-import cPickle as pickle
-
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 from IPython.utils import traitlets
 from IPython.utils.py3compat import with_metaclass, string_types
 

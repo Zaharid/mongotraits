@@ -21,6 +21,7 @@ class EmbDoc(documents.EmbeddedDocument):
 
 class TestDocument(documents.Document):
     mstr = traitlets.Unicode(default_value = "axx", db= True)
+    number = traitlets.Float(db=True)
     emb = traitlets.Instance(EmbDoc, db=True)
     moreembs = traitlets.List(traitlets.Instance(EmbDoc), db=True)
 
@@ -106,6 +107,18 @@ class Test_base(BaseTest):
         new_td2 = TD2.find_one()
         self.assertTrue(new_td2.emblist[0] is embdoc)
         self.assertEqual(new_td2.moreembslist, embdocs[1:])
+    def test_find(self):
+        for char,num in zip('ZBCDAZZC', '12345677'):
+            d = TestDocument(mstr=char, number = float(num))
+            d.save()
+        del d
+        docs1 = list(TestDocument.find({'number':{'$gt':4}}))
+        self.assertEqual(len(docs1),4)
+        docs2 = list(TestDocument.find({'mstr':'Z'}))
+        docs3 = list(TestDocument.find({'mstr':'Z','number':{'$gt':4}}))
+        self.assertEqual(set(docs1) & set(docs2), set(docs3))
+
+
 
 if __name__ == '__main__':
     unittest.TestLoader().loadTestsFromTestCase(Test_base).debug()
