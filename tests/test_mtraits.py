@@ -11,14 +11,19 @@ from labcore.mongotraits import documents
 
 from labcore.mongotraits.tests.base import BaseTest
 
+class EmbDoc(documents.EmbeddedDocument):
+    name = traitlets.Unicode(default_value = "Hello world",db=True)
+    value = traitlets.Bool(db=True)
 
 
 class TestDocument(documents.Document):
     mstr = traitlets.Unicode(default_value = "axx", db= True)
+    emb = documents.EmbeddedDocumentTrait(EmbDoc)
 
 class TD2(documents.Document):
     xxx = documents.Reference(TestDocument)
     morex = documents.ReferenceList(TestDocument)
+
 
 class Test_base(BaseTest):
     def test_a(self):
@@ -41,6 +46,24 @@ class Test_base(BaseTest):
         doc3 = TestDocument(mstr = 'd3')
         td = TD2(xxx = doc1, morex= [doc2,doc3])
         td.save()
+        doc1.save()
+        doc2.save()
+        doc3.save()
+        del doc1
+        del doc2
+        del doc3
+        del td
+        self.assertFalse(TestDocument._idrefs.data)
+        new_td2 = TD2.find_one()
+        self.assertEqual(len(new_td2.morex),2)
+    def test_embdoc(self):
+        doc = TestDocument()
+        embdoc = EmbDoc()
+        doc.emb = embdoc
+        doc.save()
+        del doc
+        new_doc = TestDocument.find_one()
+        self.assertTrue(new_doc.emb is embdoc)
 
 
 

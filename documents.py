@@ -5,23 +5,30 @@ Created on Sat Mar  8 18:21:31 2014
 @author: zah
 """
 import weakref
-
+import numbers
+import cPickle as pickle
 import pymongo
 from IPython.utils import traitlets
-from IPython.utils.py3compat import with_metaclass
+from IPython.utils.py3compat import with_metaclass, string_types
 
 from bson import objectid, dbref
 
 client = None
 database = None
 
-class MongoTraitsError(Exception):
-    pass
-
 def connect(dbname, *args, **kwargs):
     global client, database
     client = pymongo.MongoClient(*args, **kwargs)
     database = client[dbname]
+
+SAME_TYPES = string_types + (numbers.Number, list, tuple, dict,
+                             objectid.ObjectId, dbref.DBRef, type(None))
+
+
+class MongoTraitsError(Exception):
+    pass
+
+
 
 
 class ObjectIdTrait(traitlets.Instance):
@@ -35,6 +42,12 @@ class ObjectIdTrait(traitlets.Instance):
 
 
 class BaseReference(traitlets.TraitType):
+    def __init__(self, *args, **kwargs ):
+        if not 'db' in kwargs:
+            kwargs['db'] = True
+        super(BaseReference, self).__init__(*args, **kwargs)
+
+
     def __set__(self, obj, value):
         try:
             value = self.validate(obj, value)
@@ -52,12 +65,7 @@ class BaseReference(traitlets.TraitType):
 
 
 class Reference(BaseReference, traitlets.Instance):
-    def __init__(self, klass=None, args=None, kw=None,
-                 allow_none=True, **metadata ):
-        if not 'db' in metadata:
-            metadata['db'] = True
-        super(Reference, self).__init__(klass, args, kw, allow_none, **metadata)
-
+    pass
 
 
 
@@ -66,34 +74,40 @@ class ReferenceList(BaseReference, traitlets.List):
     _cast_types = (list, set)
     ref_class = Reference
 
-    def __init__(self, document,  default_value=None, allow_none=True,
-                **metadata):
+    def __init__(self, document,  *args, **kwargs):
         trait = self.ref_class(document)
+
         super(ReferenceList, self).__init__(trait = trait,
-             default_value=default_value, allow_none=allow_none,
-             **metadata)
+            *args, **kwargs)
+
+
     def dereference(self, value):
+        print("Tryind to dereference %s"%value)
         return tuple(self._trait.dereference(elem) for elem in value)
     def ref(self, value):
         return tuple(elem._id for elem in value)
 
+class EmbeddedDocumentTrait(traitlets.Instance):
+    def __init__(self, *args, **kwargs):
+        if not 'db' in kwargs:
+            kwargs['db'] = True
+        super(EmbeddedDocumentTrait, self).__init__(*args, **kwargs)
+
+    def __set__(self, obj, value):
+        super(EmbeddedDocumentTrait, self).__set__(obj, value)
+        if value is not None:
+            value.base_document = obj.__class__
 
 
 class Meta(traitlets.MetaHasTraits):
 
     def __new__(mcls, name, bases, classdict):
-        if '_id' in classdict:
-            raise ValueError("""This class cannot declare an '_id attribute'.
-            It is initialized as the database id""")
-        classdict['_id'] = ObjectIdTrait()
-
-        classdict['_id_prop'] = '_id'
         classdict['_idrefs'] = weakref.WeakValueDictionary()
-
         return super(Meta, mcls).__new__(mcls, name, bases, classdict)
 
 class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
 
+    _id = ObjectIdTrait()
     def __new__(cls, *args, **kwargs):
         inst = super(BaseDocument, cls).__new__(cls, *args,**kwargs)
         inst._db_values = {}
@@ -101,12 +115,13 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
 
     def __init__(self, *args, **kwargs):
         super(BaseDocument,self).__init__(*args, **kwargs)
-        if self._id in self.__class__._idrefs:
+        if self.idref_key() in self.__class__._idrefs:
             raise MongoTraitsError("Trying to instantiate two onjects with the same id")
-        self.__class__._idrefs[self._id] = self
+        self.__class__._idrefs[self.idref_key()] = self
 
     @classmethod
     def resolve_instance(cls, allow_update = False ,**kwargs):
+        kwargs = cls.to_classdict(**kwargs)
         if '_id' in kwargs:
             uid =  kwargs.pop('_id')
             if uid in cls._idrefs:
@@ -121,6 +136,58 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
         ins = cls(**kwargs)
         return ins
 
+    def idref_key(self, _id=None):
+        if _id is None:
+            return self._id
+        else:
+            return _id
+
+
+    @classmethod
+    def to_classdict(cls, **kwargs):
+        result = {}
+        traits = cls.class_traits(db=True)
+        instance_traits = {key:value for (key,value) in traits.items()
+            if isinstance(value, traitlets.ClassBasedTraitType) }
+        container_traits = {key:value for (key,value) in traits.items()
+            if isinstance(value, traitlets.Container) }
+
+        for (key, value) in kwargs.items():
+            if key in instance_traits:
+                result[key] = cls.to_instance(value,instance_traits[key])
+            elif key in container_traits:
+                result[key] = cls.to_container(value,container_traits[key])
+            else:
+                result[key] = value
+        return result
+
+    @classmethod
+    def to_instance(cls, value ,trait):
+        klass = trait.klass
+        if hasattr(trait, 'dereference'):
+            return trait.dereference(value)
+        elif value is None:
+            return value
+        elif hasattr(klass,'to_classdict'):
+            return klass.to_classdict(**value)
+        elif issubclass(klass, SAME_TYPES):
+            return value
+        else:
+            return pickle.loads(value)
+
+
+    @classmethod
+    def to_container(cls, value, trait):
+        import pdb;pdb.set_trace()
+        _trait =  trait._trait
+        if _trait is not None and hasattr(_trait, 'klass'):
+            l = []
+            for item in value:
+                l += [cls.to_instance(item,_trait)]
+            return l
+        else:
+           return value
+
     @property
     def savedict(self):
         savedict={}
@@ -132,15 +199,14 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
             if dbname is None: dbname = trait.name
             if name in self._db_values:
                 value = self._db_values[name]
-
             else:
                 value = self._trait_values[name]
                 if 'savedict' in dir(value):
                     value = value.savedict()
+                elif not isinstance(value, SAME_TYPES):
+                    value = pickle.dumps(value)
             savedict[dbname] = value
         return savedict
-
-
 
 class Document(BaseDocument):
     @property
@@ -190,5 +256,11 @@ class Document(BaseDocument):
 
     def save(self):
         self.collection.save(self.savedict)
+
+class EmbeddedDocument(BaseDocument):
+    def idref_key(self, _id=None):
+        if _id is None:
+            _id = self._id
+        return (self.base_document, _id)
 
 
