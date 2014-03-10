@@ -18,6 +18,8 @@ class EmbDoc(documents.EmbeddedDocument):
     name = traitlets.Unicode(default_value = "Hello world",db=True)
     value = traitlets.Bool(db=True)
 
+class DeferredReference(documents.Document):
+    ref = documents.Reference(__name__+'.TestDocument')
 
 class TestDocument(documents.Document):
     mstr = traitlets.Unicode(default_value = "axx", db= True)
@@ -37,6 +39,7 @@ class TD2(documents.Document):
 
 class NpSave(documents.Document):
     arr = traitlets.Instance(np.ndarray, db=True)
+
 
 class Test_base(BaseTest):
     def test_toclass(self):
@@ -117,6 +120,13 @@ class Test_base(BaseTest):
         docs2 = list(TestDocument.find({'mstr':'Z'}))
         docs3 = list(TestDocument.find({'mstr':'Z','number':{'$gt':4}}))
         self.assertEqual(set(docs1) & set(docs2), set(docs3))
+        proj = list(TestDocument.find(projection = {'mstr':1}))
+        self.assertEqual(len(proj),8)
+        print [item.number for item in proj]
+    def test_defred(self):
+        d = TestDocument()
+        r = DeferredReference(ref = d)
+        self.assertTrue(r.ref is d)
 
 
 

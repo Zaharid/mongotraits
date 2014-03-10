@@ -229,14 +229,14 @@ class Document(BaseDocument):
         return database[cls.collection_name()]
 
     @classmethod
-    def find(cls, query=None, allow_update = False):
-        for result in cls.collection().find(query):
+    def find(cls, query = None, projection = None, allow_update = False):
+        for result in cls.collection().find(query,projection):
             yield cls.resolve_instance(result,
                                        allow_update=allow_update)
 
     @classmethod
-    def find_one(cls, query=None, allow_update = False):
-        result = cls.collection().find_one(query)
+    def find_one(cls, query = None, projection = None, allow_update = False):
+        result = cls.collection().find_one(query, projection)
         if result is None:
             raise MongoTraitsError("There was no element matching the query %r"
             % query)
