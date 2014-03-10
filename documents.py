@@ -34,13 +34,14 @@ class MongoTraitsError(Exception):
 
 
 class ObjectIdTrait(traitlets.Instance):
-    def __init__(self, args=None, kw=None, **metadata):
-        if args is None and kw is None:
-            args = ()
+    def __init__(self, ins_args=None, ins_kw=None, allow_none = False,
+                 **metadata):
+        if ins_args is None and ins_kw is None and not allow_none:
+            ins_args = ()
         if not 'db' in metadata:
             metadata['db'] = True
         super(ObjectIdTrait, self).__init__(klass=objectid.ObjectId,
-            args = args, kw = kw, allow_none=False, **metadata )
+            args = ins_args, kw = ins_kw, allow_none=allow_none, **metadata )
 
 
 class BaseReference(traitlets.TraitType):
