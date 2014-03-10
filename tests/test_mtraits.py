@@ -34,11 +34,23 @@ class TD2(documents.Document):
             documents.EmbeddedReference(EmbDoc,TestDocument,'emb'), db=True
             )
     moreembslist = traitlets.List(
-            documents.EmbeddedReference(EmbDoc,TestDocument,'moreembs'),
+            documents.EmbeddedReference(EmbDoc,'TestDocument','moreembs'),
              db=True)
 
 class NpSave(documents.Document):
     arr = traitlets.Instance(np.ndarray, db=True)
+
+class DocFalseDb(documents.Document):
+    db_default = False
+    a = traitlets.Int(db = False)
+    b = traitlets.Int(db = True)
+    c = traitlets.Int()
+
+class DocTrueDb(documents.Document):
+    db_default = True
+    a = traitlets.Int(db = False)
+    b = traitlets.Int(db = True)
+    c = traitlets.Int()
 
 
 class Test_base(BaseTest):
@@ -122,11 +134,17 @@ class Test_base(BaseTest):
         self.assertEqual(set(docs1) & set(docs2), set(docs3))
         proj = list(TestDocument.find(projection = {'mstr':1}))
         self.assertEqual(len(proj),8)
-        print [item.number for item in proj]
+
     def test_defred(self):
         d = TestDocument()
         r = DeferredReference(ref = d)
         self.assertTrue(r.ref is d)
+    def test_dbdefault(self):
+        d1 = DocFalseDb()
+        d2 = DocTrueDb()
+        self.assertTrue('c' not in d1.savedict)
+        self.assertTrue('c' in d2.savedict)
+
 
 
 

@@ -12,6 +12,7 @@ except ImportError:
     import pickle
 from IPython.utils import traitlets
 from IPython.utils.py3compat import with_metaclass, string_types
+from IPython.utils.importstring import import_item
 
 import pymongo
 from bson import objectid, dbref, binary
@@ -60,7 +61,7 @@ class BaseReference(traitlets.TraitType):
         if value is None:
             return None
         return self.klass.load(value)
-    def ref(self, value):
+    def reference(self, value):
         return value._id
 
 
@@ -68,15 +69,30 @@ class Reference(BaseReference, traitlets.Instance):
     pass
 
 class EmbeddedReference(BaseReference, traitlets.Instance):
+
     def __init__(self, klass, document, trait_name, *args, **kwargs):
         self.document = document
         self.trait_name = trait_name
-        self.islist = isinstance(document.class_traits()[trait_name],
-                                 traitlets.Container)
+
         super(EmbeddedReference,self).__init__(klass, *args, **kwargs)
 
+    def instance_init(self,obj):
+        super(EmbeddedReference, self).instance_init(obj)
+        self.islist = isinstance(self.document.class_traits()[self.trait_name],
+                                 traitlets.Container)
+
+    def _resolve_classes(self):
+        if isinstance(self.document, string_types):
+            self.document = import_item(self.document)
+        super(EmbeddedReference, self)._resolve_classes()
+
     def dereference(self, value):
+        if value is None:
+            return None
         klass = self.klass
+        #TODO: put this in its own method in Document.
+        if value in klass._idrefs:
+            return klass._idrefs[value]
         c = self.document.collection()
         query = {'{self.trait_name}._id'.format(self=self):value}
 
@@ -88,15 +104,11 @@ class EmbeddedReference(BaseReference, traitlets.Instance):
             mgobj = mgobj[0]
         return klass.resolve_instance(mgobj)
 
-class ReferenceList(BaseReference, traitlets.List):
+class TList(traitlets.List):
+    """Validades like a list, but type is tuple. Useful until there is an
+    eventful list type"""
     klass = tuple
     _cast_types = (list, set)
-    ref_class = Reference
-
-    def __init__(self, document,  *args, **kwargs):
-        trait = self.ref_class(document)
-        super(ReferenceList, self).__init__(trait = trait,
-            *args, **kwargs)
 
 class Meta(traitlets.MetaHasTraits):
 
@@ -107,6 +119,8 @@ class Meta(traitlets.MetaHasTraits):
 class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
 
     _id = ObjectIdTrait()
+
+    db_default = True
 
     @property
     def id(self):
@@ -150,7 +164,10 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
     @classmethod
     def to_classdict(cls,kwargsdict, allow_update = False ):
         result = {}
-        traits = cls.class_traits(db=True)
+        if cls.db_default:
+            traits = cls.class_traits(db=lambda x: x is not False)
+        else:
+            traits = cls.class_traits(db=True)
         instance_traits = {key:value for (key,value) in traits.items()
             if isinstance(value, traitlets.ClassBasedTraitType) }
         container_traits = {key:value for (key,value) in traits.items()
@@ -196,8 +213,10 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
     @property
     def savedict(self):
         savedict={}
-        traits = (trait for trait in self.traits().values()
-            if trait.get_metadata('db'))
+        if self.db_default:
+            traits = self.traits(db = lambda x: x is not False).values()
+        else:
+            traits = self.traits(db=lambda x: x).values()
 
         for trait in traits:
             name = trait.name
@@ -208,8 +227,8 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
     def encode_item(self, trait, value):
         if value is None:
             return value
-        elif hasattr(trait, 'ref'):
-            value = trait.ref(value)
+        elif hasattr(trait, 'reference'):
+            value = trait.reference(value)
         elif 'savedict' in dir(value):
             value = value.savedict
         elif isinstance(trait, traitlets.Container):
