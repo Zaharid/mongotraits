@@ -26,6 +26,7 @@ class TestDocument(documents.Document):
     number = traitlets.Float(db=True)
     emb = traitlets.Instance(EmbDoc, db=True)
     moreembs = traitlets.List(traitlets.Instance(EmbDoc), db=True)
+    lst = documents.TList(traitlets.Int)
 
 class TD2(documents.Document):
     xxx = documents.Reference(TestDocument)
@@ -144,7 +145,11 @@ class Test_base(BaseTest):
         d2 = DocTrueDb()
         self.assertTrue('c' not in d1.savedict)
         self.assertTrue('c' in d2.savedict)
-
+    def test_cast_tuple(self):
+        doc = TestDocument()
+        doc.lst = [1,2,3]
+        doc.save()
+        TestDocument.find_one()
 
 
 

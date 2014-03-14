@@ -32,6 +32,8 @@ SAME_TYPES = string_types + (numbers.Number, list, tuple, dict,
 class MongoTraitsError(Exception):
     pass
 
+def Q(**kwargs):
+    return kwargs
 
 class ObjectIdTrait(traitlets.Instance):
     def __init__(self, ins_args=None, ins_kw=None, allow_none = False,
@@ -207,9 +209,9 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
             l = []
             for item in value:
                 l += [cls.to_instance(item,_trait, allow_update)]
-            return l
+            return trait.klass(l)
         else:
-           return value
+           return trait.klass(value)
 
     @property
     def savedict(self):
