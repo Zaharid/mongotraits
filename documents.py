@@ -240,6 +240,9 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
             value = binary.Binary(pickle.dumps(value))
         return value
 
+    def __repr__(self):
+        return "<%s: %s>"%(self.__class__.__name__, self._id)
+
 class Document(BaseDocument):
 
     @classmethod
@@ -248,6 +251,9 @@ class Document(BaseDocument):
 
     @classmethod
     def collection(cls):
+        if database is None:
+            raise MongoTraitsError("Must connect to the database to retrieve "
+                "the collection.")
         return database[cls.collection_name()]
 
     @classmethod
