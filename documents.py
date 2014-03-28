@@ -240,6 +240,44 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
             value = binary.Binary(pickle.dumps(value))
         return value
 
+    @property
+    def references(self):
+        return self._refs()
+
+    def _refs(self, refs=None):
+        if refs is None:
+            refs = set()
+
+        def add_ref(value):
+            if value is not None and not value in refs:
+                refs.add(value)
+                value._refs(refs)
+
+        if self.db_default:
+            traits = self.traits(db = lambda x: x is not False).values()
+        else:
+            traits = self.traits(db=lambda x: x).values()
+
+        for trait in traits:
+            if (isinstance(trait, BaseReference) or
+            (isinstance(trait, traitlets.Instance) and
+            issubclass(trait.klass, BaseDocument))):
+                value = self._trait_values[trait.name]
+                add_ref(value)
+            elif isinstance(trait, traitlets.Container):
+                _trait =  trait._trait
+                if (_trait is not None and
+                isinstance(_trait, BaseReference)):
+                    items = self._trait_values[trait.name]
+                    for value in items:
+                        add_ref(value)
+        return refs
+    @property
+    def document_references(self):
+        return {ref for ref in self.references if isinstance(ref,Document)}
+
+
+
     def __repr__(self):
         return "<%s: %s>"%(self.__class__.__name__, self._id)
 
@@ -280,7 +318,10 @@ class Document(BaseDocument):
     def refresh(self):
         self.__class__.load(self._id, allow_update = True)
 
-    def save(self):
+    def save(self, cascade = True):
+        if cascade:
+            for ref in self.document_references:
+                ref.save(cascade = False)
         self.collection().save(self.savedict)
 
 class EmbeddedDocument(BaseDocument):

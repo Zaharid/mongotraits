@@ -17,6 +17,7 @@ from labcore.mongotraits.tests.base import BaseTest
 class EmbDoc(documents.EmbeddedDocument):
     name = traitlets.Unicode(default_value = "Hello world",db=True)
     value = traitlets.Bool(db=True)
+    ref = documents.Reference(__name__ + ".TestDocument")
 
 class DeferredReference(documents.Document):
     ref = documents.Reference(__name__+'.TestDocument')
@@ -52,6 +53,9 @@ class DocTrueDb(documents.Document):
     a = traitlets.Int(db = False)
     b = traitlets.Int(db = True)
     c = traitlets.Int()
+
+class CascadeDoc(documents.Document):
+    reflist = documents.TList(documents.Reference(DeferredReference))
 
 
 class Test_base(BaseTest):
@@ -150,7 +154,18 @@ class Test_base(BaseTest):
         doc.lst = [1,2,3]
         doc.save()
         TestDocument.find_one()
-
+    def test_save_cascade(self):
+        casdoc = CascadeDoc()
+        d1,d2 = TestDocument(name = 'd1'), TestDocument()
+        derefs = [DeferredReference(ref=d1),DeferredReference(ref=d2)]
+        emb = EmbDoc(ref = d1)
+        d1.emb = emb
+        casdoc.reflist = derefs
+        self.assertEqual(casdoc.references, {d1,d2, emb} | set(derefs))
+        casdoc.save(cascade = True)
+        del casdoc, d1,d2, derefs, emb
+        rec= CascadeDoc.find_one()
+        self.assertTrue(rec.reflist[0].ref.emb.ref.name == 'd1')
 
 
 if __name__ == '__main__':
