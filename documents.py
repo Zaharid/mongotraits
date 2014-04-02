@@ -282,6 +282,8 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
 
 class Document(BaseDocument):
 
+    indb = False
+
     @classmethod
     def collection_name(cls):
         baseindex = cls.__mro__.index(Document) - 1
@@ -301,8 +303,10 @@ class Document(BaseDocument):
     @classmethod
     def find(cls, query = None, projection = None, allow_update = False):
         for result in cls.collection().find(query,projection):
-            yield cls.resolve_instance(result,
+            ins =  cls.resolve_instance(result,
                                        allow_update=allow_update)
+            ins.indb = True
+            yield ins
 
     @classmethod
     def find_one(cls, query = None, projection = None, allow_update = False):
@@ -310,8 +314,18 @@ class Document(BaseDocument):
         if result is None:
             raise MongoTraitsError(("There was no element matching the query %r"
             " in collection %s.")% (query, cls.collection_name()))
-        return cls.resolve_instance(result,
+        ins =  cls.resolve_instance(result,
                                     allow_update=allow_update)
+        ins.indb = True
+        return ins
+
+    @classmethod
+    def get_or_create(cls, query = None, projection = None,
+                      allow_update = False):
+        try:
+            return cls.find_one(query, projection, allow_update = False)
+        except MongoTraitsError:
+            return cls(**query)
 
     @classmethod
     def load(cls,_id, allow_update = False):
@@ -327,6 +341,7 @@ class Document(BaseDocument):
             for ref in self.document_references:
                 ref.save(cascade = False)
         self.collection().save(self.savedict)
+        self.indb = True
 
 class EmbeddedDocument(BaseDocument):
     pass

@@ -176,7 +176,18 @@ class Test_base(BaseTest):
         del dref, sub
         nsub = DeferredReference.find_one()
         self.assertEqual(nsub.ref.mstr, "ssub")
-
+    def test_indb(self):
+        doc, doc2, doc3 = TestDocument(), TestDocument(), TestDocument()
+        self.assertFalse(doc.indb)
+        doc.save()
+        doc2.save()
+        doc3.save()
+        self.assertTrue(doc.indb)
+        del doc, doc2, doc3
+        ndoc = TestDocument.find_one()
+        self.assertTrue(ndoc.indb)
+        ndocs = TestDocument.find()
+        self.assertTrue(all(d.indb for d in ndocs))
 
 if __name__ == '__main__':
     unittest.TestLoader().loadTestsFromTestCase(Test_base).debug()
