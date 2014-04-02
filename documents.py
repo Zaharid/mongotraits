@@ -272,11 +272,10 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
                     for value in items:
                         add_ref(value)
         return refs
+
     @property
     def document_references(self):
         return {ref for ref in self.references if isinstance(ref,Document)}
-
-
 
     def __repr__(self):
         return "<%s: %s>"%(self.__class__.__name__, self._id)
@@ -285,7 +284,12 @@ class Document(BaseDocument):
 
     @classmethod
     def collection_name(cls):
-        return cls.__name__
+        baseindex = cls.__mro__.index(Document) - 1
+        if baseindex < 0:
+            raise MongoTraitsError("Need to subclass before"
+            " getting a collection name.")
+        baseclass = cls.__mro__[baseindex]
+        return baseclass.__name__
 
     @classmethod
     def collection(cls):
@@ -304,8 +308,8 @@ class Document(BaseDocument):
     def find_one(cls, query = None, projection = None, allow_update = False):
         result = cls.collection().find_one(query, projection)
         if result is None:
-            raise MongoTraitsError("There was no element matching the query %r"
-            % query)
+            raise MongoTraitsError(("There was no element matching the query %r"
+            " in collection %s.")% (query, cls.collection_name()))
         return cls.resolve_instance(result,
                                     allow_update=allow_update)
 
@@ -318,7 +322,7 @@ class Document(BaseDocument):
     def refresh(self):
         self.__class__.load(self._id, allow_update = True)
 
-    def save(self, cascade = True):
+    def save(self, cascade = False):
         if cascade:
             for ref in self.document_references:
                 ref.save(cascade = False)

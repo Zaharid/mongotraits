@@ -57,6 +57,9 @@ class DocTrueDb(documents.Document):
 class CascadeDoc(documents.Document):
     reflist = documents.TList(documents.Reference(DeferredReference))
 
+class Sub(TestDocument):
+    pass
+
 
 class Test_base(BaseTest):
     def test_toclass(self):
@@ -166,6 +169,13 @@ class Test_base(BaseTest):
         del casdoc, d1,d2, derefs, emb
         rec= CascadeDoc.find_one()
         self.assertTrue(rec.reflist[0].ref.emb.ref.name == 'd1')
+    def test_find_subclass(self):
+        sub = Sub(mstr = "ssub")
+        dref = DeferredReference(ref = sub)
+        dref.save(cascade = True)
+        del dref, sub
+        nsub = DeferredReference.find_one()
+        self.assertEqual(nsub.ref.mstr, "ssub")
 
 
 if __name__ == '__main__':
