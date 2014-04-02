@@ -36,7 +36,8 @@ class TD2(documents.Document):
             documents.EmbeddedReference(EmbDoc,TestDocument,'emb'), db=True
             )
     moreembslist = traitlets.List(
-            documents.EmbeddedReference(EmbDoc,'TestDocument','moreembs'),
+            documents.EmbeddedReference(EmbDoc,
+                                        __name__+'.TestDocument','moreembs'),
              db=True)
 
 class NpSave(documents.Document):
@@ -200,6 +201,14 @@ class Test_base(BaseTest):
         doc2.delete()
         del doc2
         self.assertEqual(len(list(TestDocument.find())),1)
+
+    def test_exists(self):
+        doc, doc2, doc3 = TestDocument(mstr='x'),TestDocument(), TestDocument()
+        doc.save()
+        doc2.save()
+        doc3.save()
+        self.assertTrue(TestDocument.exists({'mstr':'x'}))
+        self.assertFalse(TestDocument.exists({'mstr':'xxx'}))
 
 
 

@@ -227,7 +227,8 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
             savedict[name] = value
         return savedict
 
-    def encode_item(self, trait, value):
+    @staticmethod
+    def encode_item(trait, value):
         if value is None:
             return value
         elif hasattr(trait, 'reference'):
@@ -235,7 +236,7 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
         elif 'savedict' in dir(value):
             value = value.savedict
         elif isinstance(trait, traitlets.Container):
-            value = [self.encode_item(trait._trait, elem) for elem in value]
+            value = [Document.encode_item(trait._trait,elem) for elem in value]
         elif not isinstance(value, SAME_TYPES):
             value = binary.Binary(pickle.dumps(value))
         return value
@@ -301,16 +302,25 @@ class Document(BaseDocument):
         return database[cls.collection_name()]
 
     @classmethod
-    def find(cls, query = None, projection = None, allow_update = False):
-        for result in cls.collection().find(query,projection):
+    def _resolve_query(cls, query):
+        if query is None: return
+        for (name,value) in query.items():
+            trait = cls.class_traits()[name]
+            query[name] = cls.encode_item(trait, value)
+
+    @classmethod
+    def find(cls, query = None, projection = None, allow_update = False, **kwargs):
+        cls._resolve_query(query)
+        for result in cls.collection().find(query,projection, **kwargs):
             ins =  cls.resolve_instance(result,
                                        allow_update=allow_update)
             ins.indb = True
             yield ins
 
     @classmethod
-    def find_one(cls, query = None, projection = None, allow_update = False):
-        result = cls.collection().find_one(query, projection)
+    def find_one(cls, query = None, projection = None, allow_update = False, **kwargs):
+        cls._resolve_query(query)
+        result = cls.collection().find_one(query, projection, **kwargs)
         if result is None:
             raise MongoTraitsError(("There was no element matching the query %r"
             " in collection %s.")% (query, cls.collection_name()))
@@ -320,13 +330,22 @@ class Document(BaseDocument):
         return ins
 
     @classmethod
+    def exists(cls, query):
+        cls._resolve_query(query)
+        res = cls.collection().find(query, limit = 1)
+        return res.count(with_limit_and_skip=True) > 0
+
+
+    @classmethod
     def remove(cls, query = None, **kwargs):
+        cls._resolve_query(query)
         cls.collection().remove(query, **kwargs)
 
 
     @classmethod
     def get_or_create(cls, query = None, projection = None,
                       allow_update = False):
+        cls._resolve_query(query)
         try:
             return cls.find_one(query, projection, allow_update = False)
         except MongoTraitsError:
@@ -337,6 +356,7 @@ class Document(BaseDocument):
         if not allow_update and _id in cls._idrefs:
             return cls._idrefs[_id]
         return cls.find_one({'_id':_id}, allow_update = allow_update)
+
 
     def refresh(self):
         self.__class__.load(self._id, allow_update = True)
