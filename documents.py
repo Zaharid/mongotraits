@@ -320,6 +320,11 @@ class Document(BaseDocument):
         return ins
 
     @classmethod
+    def remove(cls, query = None, **kwargs):
+        cls.collection().remove(query, **kwargs)
+
+
+    @classmethod
     def get_or_create(cls, query = None, projection = None,
                       allow_update = False):
         try:
@@ -335,6 +340,9 @@ class Document(BaseDocument):
 
     def refresh(self):
         self.__class__.load(self._id, allow_update = True)
+
+    def delete(self):
+        self.__class__.remove({'_id' : self._id}, multi = False)
 
     def save(self, cascade = False):
         if cascade:

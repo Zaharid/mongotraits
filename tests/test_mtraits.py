@@ -188,6 +188,23 @@ class Test_base(BaseTest):
         self.assertTrue(ndoc.indb)
         ndocs = TestDocument.find()
         self.assertTrue(all(d.indb for d in ndocs))
+    def test_delete(self):
+        doc, doc2, doc3 = TestDocument(mstr='x'),TestDocument(), TestDocument()
+        doc.save()
+        doc2.save()
+        doc3.save()
+        did = doc.id
+        del doc
+        TestDocument.remove({'mstr':'x'})
+        self.assertRaises(documents.MongoTraitsError, TestDocument.find_one, {'_id':did})
+        doc2.delete()
+        del doc2
+        self.assertEqual(len(list(TestDocument.find())),1)
+
+
+
+
+
 
 if __name__ == '__main__':
     unittest.TestLoader().loadTestsFromTestCase(Test_base).debug()
