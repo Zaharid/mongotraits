@@ -6,6 +6,7 @@ Created on Sat Mar  8 18:21:31 2014
 """
 import weakref
 import numbers
+import datetime
 try:
     import cPickle as pickle
 except ImportError:
@@ -25,8 +26,8 @@ def connect(dbname, *args, **kwargs):
     client = pymongo.MongoClient(*args, **kwargs)
     database = client[dbname]
 
-SAME_TYPES = string_types + (numbers.Number, list, tuple, dict,
-                             objectid.ObjectId, dbref.DBRef, type(None))
+SAME_TYPES = string_types + (datetime.datetime, numbers.Number, list, tuple,
+                             dict, objectid.ObjectId, dbref.DBRef, type(None))
 
 
 class MongoTraitsError(Exception):
