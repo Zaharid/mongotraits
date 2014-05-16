@@ -47,7 +47,7 @@ class ObjectIdTrait(traitlets.Instance):
             args = ins_args, kw = ins_kw, allow_none=allow_none, **metadata )
 
 
-class BaseReference(traitlets.TraitType):
+class BaseReference(traitlets.Instance):
     def __init__(self, *args, **kwargs ):
         if not 'db' in kwargs:
             kwargs['db'] = True
@@ -69,10 +69,10 @@ class BaseReference(traitlets.TraitType):
         return value._id
 
 
-class Reference(BaseReference, traitlets.Instance):
+class Reference(BaseReference):
     pass
 
-class EmbeddedReference(BaseReference, traitlets.Instance):
+class EmbeddedReference(BaseReference):
 
     def __init__(self, klass, document, trait_name, *args, **kwargs):
         self.document = document
