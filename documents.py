@@ -43,6 +43,8 @@ class ObjectIdTrait(traitlets.Instance):
             ins_args = ()
         if not 'db' in metadata:
             metadata['db'] = True
+        if not 'widget' in metadata:
+            metadata['widget'] = None
         super(ObjectIdTrait, self).__init__(klass=objectid.ObjectId,
             args = ins_args, kw = ins_kw, allow_none=allow_none, **metadata )
 
