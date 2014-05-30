@@ -7,6 +7,7 @@ Created on Sat Mar  8 18:21:31 2014
 import weakref
 import numbers
 import datetime
+from collections import OrderedDict 
 try:
     import cPickle as pickle
 except ImportError:
@@ -117,6 +118,10 @@ class TList(traitlets.List):
     _cast_types = (list, set)
 
 class Meta(traitlets.MetaHasTraits):
+    
+    @classmethod
+    def __prepare__(mcls, name, bases):
+        return OrderedDict()
 
     def __new__(mcls, name, bases, classdict):
         classdict['_idrefs'] = weakref.WeakValueDictionary()
