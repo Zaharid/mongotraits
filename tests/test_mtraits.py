@@ -61,6 +61,15 @@ class CascadeDoc(documents.Document):
 class Sub(TestDocument):
     pass
 
+class BaseDoc(documents.Document):
+    a = traitlets.Int()
+    
+class ADoc(BaseDoc):
+    _class_tag = True
+
+class BDoc(BaseDoc):
+    _class_tag = True
+
 
 class Test_base(BaseTest):
     def test_toclass(self):
@@ -209,6 +218,26 @@ class Test_base(BaseTest):
         doc3.save()
         self.assertTrue(TestDocument.exists({'mstr':'x'}))
         self.assertFalse(TestDocument.exists({'mstr':'xxx'}))
+        
+    def test_multi(self):
+        base = BaseDoc(a=-1)
+        a1,a2,a3 = [ADoc(a = i) for i in (1,2,3)]
+        b1,b2,b3 = [BDoc(a = i) for i in (1,2,3)]
+        base.save()
+        a1.save()
+        a2.save()
+        a3.save()
+        b1.save()
+        b2.save()
+        b3.save()
+        self.assertEqual(len(list(BaseDoc.find())),7)
+        self.assertEqual(len(list(ADoc.find())),3)
+        self.assertEqual(len(list(BDoc.find())),3)
+        ADoc.remove({'a':2})
+        self.assertEqual(len(list(ADoc.find())),2)
+        self.assertEqual(len(list(BDoc.find())),3)
+        
+        
 
 
 

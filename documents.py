@@ -251,6 +251,8 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
             name = trait.name
             value = self.encode_item(trait, self._trait_values[name])
             savedict[name] = value
+        if self._class_tag:
+            savedict['_cls'] = self.__class__.__name__
         return savedict
 
     @staticmethod
@@ -341,18 +343,20 @@ class Document(BaseDocument):
     def _resolve_query(cls, query):
         if query is None:
             if not cls._class_tag:
-                return query
+                return None
             else:
-                return  {'_cls': cls.__name__}
+                return {'_cls': cls.__name__}
+        query = dict(query)
         for (name,value) in query.items():
             trait = cls.class_traits()[name]
             query[name] = cls.encode_item(trait, value)
         if cls._class_tag:    
             query['_cls'] = cls.__name__
+        return query
 
     @classmethod
     def find(cls, query = None, projection = None, allow_update = False, **kwargs):
-        cls._resolve_query(query)
+        query = cls._resolve_query(query)
         for result in cls.collection().find(query,projection, **kwargs):
             ins =  cls.resolve_instance(result,
                                        allow_update=allow_update)
@@ -361,7 +365,7 @@ class Document(BaseDocument):
 
     @classmethod
     def find_one(cls, query = None, projection = None, allow_update = False, **kwargs):
-        cls._resolve_query(query)
+        query = cls._resolve_query(query)
         result = cls.collection().find_one(query, projection, **kwargs)
         if result is None:
             raise MongoTraitsError(("There was no element matching the query %r"
@@ -373,21 +377,21 @@ class Document(BaseDocument):
 
     @classmethod
     def exists(cls, query):
-        cls._resolve_query(query)
+        query = cls._resolve_query(query)
         res = cls.collection().find(query, limit = 1)
         return res.count(with_limit_and_skip=True) > 0
 
 
     @classmethod
     def remove(cls, query = None, **kwargs):
-        cls._resolve_query(query)
+        query = cls._resolve_query(query)
         cls.collection().remove(query, **kwargs)
 
 
     @classmethod
     def get_or_create(cls, query = None, projection = None,
                       allow_update = False):
-        cls._resolve_query(query)
+        query = cls._resolve_query(query)
         try:
             return cls.find_one(query, projection, allow_update = False)
         except MongoTraitsError:
