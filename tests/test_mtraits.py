@@ -63,7 +63,8 @@ class Sub(TestDocument):
 
 class BaseDoc(documents.Document):
     a = traitlets.Int()
-    
+    ref = documents.Reference(__name__+'.BaseDoc')
+
 class ADoc(BaseDoc):
     _class_tag = True
 
@@ -218,7 +219,7 @@ class Test_base(BaseTest):
         doc3.save()
         self.assertTrue(TestDocument.exists({'mstr':'x'}))
         self.assertFalse(TestDocument.exists({'mstr':'xxx'}))
-        
+
     def test_multi(self):
         base = BaseDoc(a=-1)
         a1,a2,a3 = [ADoc(a = i) for i in (1,2,3)]
@@ -236,11 +237,12 @@ class Test_base(BaseTest):
         ADoc.remove({'a':2})
         self.assertEqual(len(list(ADoc.find())),2)
         self.assertEqual(len(list(BDoc.find())),3)
-        
-        
-
-
-
+        b1.ref = a1
+        b1.save()
+        del b1
+        del a1
+        b1 = BDoc.find_one({'a':1})
+        self.assertIsInstance(b1.ref, ADoc)
 
 
 if __name__ == '__main__':

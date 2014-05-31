@@ -7,7 +7,7 @@ Created on Sat Mar  8 18:21:31 2014
 import weakref
 import numbers
 import datetime
-from collections import OrderedDict 
+from collections import OrderedDict, defaultdict
 try:
     import cPickle as pickle
 except ImportError:
@@ -70,7 +70,7 @@ class BaseReference(traitlets.Instance):
     def dereference(self, value):
         if value is None:
             return None
-        return self.klass.load(value)
+        return self.klass.load_ref(value)
     def reference(self, value):
         return value._id
 
@@ -119,8 +119,8 @@ class TList(traitlets.List):
     eventful list type"""
     klass = tuple
     _cast_types = (list, set)
-    
-    
+
+
 #http://stackoverflow.com/questions/16647307/metaclass-cannot-replace-class-dict
 class OrderedClass(type):
     @classmethod
@@ -128,16 +128,22 @@ class OrderedClass(type):
         return OrderedDict()
 
     def __new__(mcls, name, bases, classdict):
-        result = super(OrderedClass, mcls).__new__(mcls, name, bases, classdict)
-        result._member_names = list(classdict.keys())
-        return result
+        cls = super(OrderedClass, mcls).__new__(mcls, name, bases, classdict)
+        cls._member_names = list(classdict.keys())
+        return cls
 
-
+_collection = defaultdict(dict)
 class Meta(traitlets.MetaHasTraits, OrderedClass):
-    
+
     def __new__(mcls, name, bases, classdict):
         classdict['_idrefs'] = weakref.WeakValueDictionary()
         return super(Meta, mcls).__new__(mcls, name, bases, classdict)
+
+    def __init__(cls, name, bases, classdict):
+        super(Meta, cls).__init__(name, bases, classdict)
+        #work around with_metaclass
+        if hasattr(cls, 'collection_name') and cls.mro().index(BaseDocument)>1:
+            _collection[cls.collection_name()][cls.__name__] = cls
 
 class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
 
@@ -197,10 +203,10 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
             traits = cls.class_traits(db=True)
         instance_traits = {key:value for (key,value) in traits.items()
             if isinstance(value, traitlets.ClassBasedTraitType) }
-                
+
         container_traits = {key:value for (key,value) in traits.items()
             if isinstance(value, traitlets.Container) }
-                
+
         for (key, value) in kwargsdict.items():
             if key in container_traits:
                 result[key] = cls.to_container(value,container_traits[key],
@@ -230,7 +236,7 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
 
     @classmethod
     def to_container(cls, value, trait, allow_update):
-        _trait =  trait._trait          
+        _trait =  trait._trait
         if _trait is not None and hasattr(_trait, 'klass'):
             l = []
             for item in value:
@@ -308,12 +314,12 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
 
     def __repr__(self):
         return "<%s: %s>"%(self.__class__.__name__, self._id)
-        
+
     class CreateManager(create_object.CreateManager):
-        @property            
+        @property
         def create_description(self):
             return "Create %s and save" % self.cls.__name__
-            
+
         def new_object(self, button):
             obj = super(BaseDocument.CreateManager, self).new_object(button)
             obj.save()
@@ -322,7 +328,7 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
 class Document(BaseDocument):
 
     indb = False
-    
+
     @classmethod
     def collection_name(cls):
         baseindex = cls.__mro__.index(Document) - 1
@@ -350,7 +356,7 @@ class Document(BaseDocument):
         for (name,value) in query.items():
             trait = cls.class_traits()[name]
             query[name] = cls.encode_item(trait, value)
-        if cls._class_tag:    
+        if cls._class_tag:
             query['_cls'] = cls.__name__
         return query
 
@@ -398,10 +404,28 @@ class Document(BaseDocument):
             return cls(**query)
 
     @classmethod
-    def load(cls,_id, allow_update = False):
+    def load(cls, _id, allow_update = False):
         if not allow_update and _id in cls._idrefs:
             return cls._idrefs[_id]
         return cls.find_one({'_id':_id}, allow_update = allow_update)
+
+    @classmethod
+    def load_ref(cls, _id, allow_update = False):
+        classes = _collection[cls.collection_name()].values()
+        for klass in classes:
+            if not allow_update and _id in klass._idrefs:
+                return klass._idrefs[_id]
+        result = cls.collection().find_one({'_id':_id})
+        if '_cls' in result:
+            klass = _collection[cls.collection_name()][result['_cls']]
+            ins =  klass.resolve_instance(result,
+                                    allow_update=allow_update)
+        else:
+            ins =  cls.resolve_instance(result,
+                                    allow_update=allow_update)
+        return ins
+
+
 
 
     def refresh(self):
