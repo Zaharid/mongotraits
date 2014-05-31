@@ -184,8 +184,10 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
             traits = cls.class_traits(db=True)
         instance_traits = {key:value for (key,value) in traits.items()
             if isinstance(value, traitlets.ClassBasedTraitType) }
+                
         container_traits = {key:value for (key,value) in traits.items()
             if isinstance(value, traitlets.Container) }
+                
         for (key, value) in kwargsdict.items():
             if key in container_traits:
                 result[key] = cls.to_container(value,container_traits[key],
@@ -215,7 +217,7 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
 
     @classmethod
     def to_container(cls, value, trait, allow_update):
-        _trait =  trait._trait
+        _trait =  trait._trait          
         if _trait is not None and hasattr(_trait, 'klass'):
             l = []
             for item in value:
@@ -298,7 +300,7 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
             return "Create %s and save" % self.cls.__name__
             
         def new_object(self, button):
-            obj = super(create_object.CreateManager, self).new_object(button)
+            obj = super(BaseDocument.CreateManager, self).new_object(button)
             obj.save()
             return obj
 
