@@ -119,13 +119,22 @@ class TList(traitlets.List):
     eventful list type"""
     klass = tuple
     _cast_types = (list, set)
-
-class Meta(traitlets.MetaHasTraits):
     
+    
+#http://stackoverflow.com/questions/16647307/metaclass-cannot-replace-class-dict
+class OrderedClass(type):
     @classmethod
     def __prepare__(mcls, name, bases):
         return OrderedDict()
 
+    def __new__(mcls, name, bases, classdict):
+        result = super(OrderedClass, mcls).__new__(mcls, name, bases, classdict)
+        result._member_names = list(classdict.keys())
+        return result
+
+
+class Meta(traitlets.MetaHasTraits, OrderedClass):
+    
     def __new__(mcls, name, bases, classdict):
         classdict['_idrefs'] = weakref.WeakValueDictionary()
         return super(Meta, mcls).__new__(mcls, name, bases, classdict)
@@ -135,6 +144,8 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
     _id = ObjectIdTrait()
 
     db_default = True
+    _class_tag = False
+
 
     @property
     def id(self):
@@ -160,6 +171,8 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
     def resolve_instance(cls, kwargsdict, allow_update = False):
         errstr = ("Local and database objects are inconsistent and"
         " allow_update is set to false.")
+        if cls._class_tag:
+            kwargsdict.pop('_cls')
         kwargsdict = cls.to_classdict(kwargsdict,allow_update)
         if '_id' in kwargsdict:
             uid =  kwargsdict['_id']
@@ -307,7 +320,7 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
 class Document(BaseDocument):
 
     indb = False
-
+    
     @classmethod
     def collection_name(cls):
         baseindex = cls.__mro__.index(Document) - 1
@@ -326,10 +339,16 @@ class Document(BaseDocument):
 
     @classmethod
     def _resolve_query(cls, query):
-        if query is None: return
+        if query is None:
+            if not cls._class_tag:
+                return query
+            else:
+                return  {'_cls': cls.__name__}
         for (name,value) in query.items():
             trait = cls.class_traits()[name]
             query[name] = cls.encode_item(trait, value)
+        if cls._class_tag:    
+            query['_cls'] = cls.__name__
 
     @classmethod
     def find(cls, query = None, projection = None, allow_update = False, **kwargs):
