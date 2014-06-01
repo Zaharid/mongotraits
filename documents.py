@@ -20,7 +20,7 @@ import pymongo
 from bson import objectid, dbref, binary
 
 
-from labcore.widgets import create_object
+from labcore.widgets import widgetrepr
 
 client = None
 database = None
@@ -315,13 +315,13 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
     def __repr__(self):
         return "<%s: %s>"%(self.__class__.__name__, self._id)
 
-    class CreateManager(create_object.CreateManager):
-        @property
+    class WidgetRepresentation(widgetrepr.WidgetRepresentation):
+        
         def create_description(self):
             return "Create %s and save" % self.cls.__name__
 
         def new_object(self, button):
-            obj = super(BaseDocument.CreateManager, self).new_object(button)
+            obj = super(BaseDocument.WidgetRepresentation, self).new_object(button)
             obj.save()
             return obj
 
