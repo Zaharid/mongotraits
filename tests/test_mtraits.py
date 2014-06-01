@@ -243,7 +243,7 @@ class Test_base(BaseTest):
         del a1
         b1 = BDoc.find_one({'a':1})
         self.assertIsInstance(b1.ref, ADoc)
-    
+
     def test_references_resolve_classes(self):
         td = TestDocument()
         dr = DeferredReference(ref = td)
@@ -252,7 +252,13 @@ class Test_base(BaseTest):
         td.save()
         del td
         del dr
-        dr = DeferredReference.find_one()
+        #Will fail if _resolve_classes is never called.
+        class X(documents.Document):
+            ref = documents.Reference(__name__+'.TestDocument')
+            @classmethod
+            def collection_name(cls):
+                return 'DeferredReference'
+        dr = X.find_one()
         self.assertIsInstance(dr.ref, TestDocument)
 
 
