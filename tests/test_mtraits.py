@@ -243,6 +243,17 @@ class Test_base(BaseTest):
         del a1
         b1 = BDoc.find_one({'a':1})
         self.assertIsInstance(b1.ref, ADoc)
+    
+    def test_references_resolve_classes(self):
+        td = TestDocument()
+        dr = DeferredReference(ref = td)
+        self.assertIs(dr.ref, td)
+        dr.save()
+        td.save()
+        del td
+        del dr
+        dr = DeferredReference.find_one()
+        self.assertIsInstance(dr.ref, TestDocument)
 
 
 if __name__ == '__main__':

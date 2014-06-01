@@ -70,6 +70,8 @@ class BaseReference(traitlets.Instance):
     def dereference(self, value):
         if value is None:
             return None
+        #Solves irreproducible? random error.
+        self._resolve_classes()
         return self.klass.load_ref(value)
     def reference(self, value):
         return value._id
