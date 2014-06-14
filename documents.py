@@ -321,8 +321,8 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
         def create_description(self):
             return "Create %s and save" % self.cls.__name__
 
-        def new_object(self, button):
-            obj = super(BaseDocument.WidgetRepresentation, self).new_object(button)
+        def new_object(self):
+            obj = super(BaseDocument.WidgetRepresentation, self).new_object()
             obj.save()
             return obj
 
