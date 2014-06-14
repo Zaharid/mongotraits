@@ -323,7 +323,7 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
 
         def new_object(self):
             obj = super(BaseDocument.WidgetRepresentation, self).new_object()
-            obj.save()
+            obj.save(cascade = True)
             return obj
 
 class Document(BaseDocument):
