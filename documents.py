@@ -420,6 +420,10 @@ class Document(BaseDocument):
             if not allow_update and _id in klass._idrefs:
                 return klass._idrefs[_id]
         result = cls.collection().find_one({'_id':_id})
+        if not result:
+            s = ("Could not load reference %s in collection %s."% 
+                    (_id , cls.collection_name))
+            raise MongoTraitsError(s)
         if '_cls' in result:
             klass = _collection[cls.collection_name()][result['_cls']]
             ins =  klass.resolve_instance(result,
