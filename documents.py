@@ -166,7 +166,7 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
         self.check_instance()
 
     def check_instance(self, _id=None):
-        errstr = "Trying to instantiate two onjects with the same id"
+        errstr = "Trying to instantiate two objects with the same id"
         if _id is None:
             _id = self._id
         if _id in self.__class__._idrefs:
@@ -312,9 +312,12 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
     @property
     def document_references(self):
         return {ref for ref in self.references if isinstance(ref,Document)}
+    
+    def repr_name(self):
+        return self.id
 
     def __repr__(self):
-        return "<%s: %s>"%(self.__class__.__name__, self._id)
+        return "<%s: %s>"%(self.__class__.__name__, self.repr_name())
 
     class WidgetRepresentation(widgetrepr.WidgetRepresentation):
         
