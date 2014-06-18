@@ -124,13 +124,18 @@ class TList(traitlets.List):
 
 #http://stackoverflow.com/questions/16647307/metaclass-cannot-replace-class-dict
 class OrderedClass(type):
+
     @classmethod
     def __prepare__(mcls, name, bases):
         return OrderedDict()
 
     def __new__(mcls, name, bases, classdict):
         cls = super(OrderedClass, mcls).__new__(mcls, name, bases, classdict)
-        cls._member_names = list(classdict.keys())
+        lbases = []
+        for base in bases:
+            if hasattr(base, '_member_names'):
+                lbases += base._member_names
+        cls._member_names = list(classdict.keys()) + lbases
         return cls
 
 _collection = defaultdict(dict)
@@ -312,7 +317,7 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
     @property
     def document_references(self):
         return {ref for ref in self.references if isinstance(ref,Document)}
-    
+
     def repr_name(self):
         return self.id
 
@@ -320,7 +325,7 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
         return "<%s: %s>"%(self.__class__.__name__, self.repr_name())
 
     class WidgetRepresentation(widgetrepr.WidgetRepresentation):
-        
+
         def create_description(self):
             return "Create %s and save" % self.cls.__name__
 
@@ -421,7 +426,7 @@ class Document(BaseDocument):
                 return klass._idrefs[_id]
         result = cls.collection().find_one({'_id':_id})
         if not result:
-            s = ("Could not load reference %s in collection %s."% 
+            s = ("Could not load reference %s in collection %s."%
                     (_id , cls.collection_name))
             raise MongoTraitsError(s)
         if '_cls' in result:
