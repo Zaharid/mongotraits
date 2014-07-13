@@ -19,7 +19,11 @@ from IPython.utils.importstring import import_item
 import pymongo
 from bson import objectid, dbref, binary
 
-from labcore.widgets import widgetrepr
+try:
+    import widgetrepr
+    WIDGETREPR_IMPORTED = True
+except ImportError:
+    WIDGETREPR_IMPORTED = False
 
 client = None
 database = None
@@ -322,16 +326,18 @@ class BaseDocument(with_metaclass(Meta, traitlets.HasTraits)):
 
     def __repr__(self):
         return "<%s: %s>"%(self.__class__.__name__, self.repr_name())
+    
+    if WIDGETREPR_IMPORTED:
 
-    class WidgetRepresentation(widgetrepr.WidgetRepresentation):
-
-        def create_description(self):
-            return "Create %s and save" % self.cls.__name__
-
-        def new_object(self):
-            obj = super(BaseDocument.WidgetRepresentation, self).new_object()
-            obj.save(cascade = True)
-            return obj
+        class WidgetRepresentation(widgetrepr.WidgetRepresentation):
+    
+            def create_description(self):
+                return "Create %s and save" % self.cls.__name__
+    
+            def new_object(self):
+                obj = super(BaseDocument.WidgetRepresentation, self).new_object()
+                obj.save(cascade = True)
+                return obj
 
 class Document(BaseDocument):
 
