@@ -8,9 +8,9 @@ Created on Mon Dec 30 21:39:41 2013
 import sys
 import os
 try:
-    from distutils.core import setup
-except ImportError:
     from setuptools import setup
+except ImportError:
+    from distutils.core import setup
 
 if sys.version_info[0] == 3:
     LONG_DESCRIPTION = open('README.md', encoding='utf-8').read()
