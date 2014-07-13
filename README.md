@@ -1,7 +1,7 @@
 Mongotraits
 ===========
 
-A liteweight simple Object Document Manager to connect Python objects to MongoDB.
+A liteweight simple Object Document Manager to connect Python objects to MongoDB, similar to [mongoengine](http://mongoengine.org/)
 
 Features
 --------
@@ -67,3 +67,8 @@ loaded_post= BlogPost.find_one({'title':"Second Post"})
 #Same id always corresponds to the same Python object.
 assert(loaded_post.references[0] is my_post)
 ````
+
+Known bugs
+----------
+
+Circular references do not work properly at the moment.
