@@ -19,7 +19,6 @@ from IPython.utils.importstring import import_item
 import pymongo
 from bson import objectid, dbref, binary
 
-
 from labcore.widgets import widgetrepr
 
 client = None

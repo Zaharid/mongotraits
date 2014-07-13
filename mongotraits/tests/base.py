@@ -6,8 +6,8 @@ Created on Sat Mar  8 21:59:43 2014
 """
 
 import unittest
-from labcore.mongotraits import documents
-from labcore.mongotraits.documents import  connect
+from mongotraits import documents
+from mongotraits.documents import  connect
 class BaseTest(unittest.TestCase):
     def setUp(self):
         connect('test')
